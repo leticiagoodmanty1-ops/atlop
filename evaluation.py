@@ -101,6 +101,11 @@ def official_evaluate(tmp, path):
     # 用于 Intra/Inter 分类的 Gold 标签统计
     std_intra = {}  # 句内关系的 Gold 标签
     std_inter = {}  # 句间关系的 Gold 标签
+    
+    # 用于 Evidence-1/2/3+ 分类的 Gold 标签统计
+    std_evi1 = {}   # 1个证据句的关系
+    std_evi2 = {}   # 2个证据句的关系
+    std_evi3 = {}   # 3个及以上证据句的关系
 
     for x in truth:
         title = x['title']
@@ -121,10 +126,22 @@ def official_evaluate(tmp, path):
                 std_intra[(title, r, h_idx, t_idx)] = set(label['evidence'])
             else:
                 std_inter[(title, r, h_idx, t_idx)] = set(label['evidence'])
+            
+            # 根据证据句数量分组
+            evi_count = len(label['evidence'])
+            if evi_count == 1:
+                std_evi1[(title, r, h_idx, t_idx)] = set(label['evidence'])
+            elif evi_count == 2:
+                std_evi2[(title, r, h_idx, t_idx)] = set(label['evidence'])
+            else:  # evi_count >= 3
+                std_evi3[(title, r, h_idx, t_idx)] = set(label['evidence'])
 
     tot_relations = len(std)
     tot_intra_relations = len(std_intra)
     tot_inter_relations = len(std_inter)
+    tot_evi1_relations = len(std_evi1)
+    tot_evi2_relations = len(std_evi2)
+    tot_evi3_relations = len(std_evi3)
     
     tmp.sort(key=lambda x: (x['title'], x['h_idx'], x['t_idx'], x['r']))
     submission_answer = [tmp[0]]
@@ -145,6 +162,14 @@ def official_evaluate(tmp, path):
     pred_inter = 0       # 预测的句间关系数量
     correct_intra = 0    # 正确预测的句内关系数量
     correct_inter = 0    # 正确预测的句间关系数量
+    
+    # Evidence-1/2/3+ 分类统计
+    pred_evi1 = 0        # 预测的1证据句关系数量
+    pred_evi2 = 0        # 预测的2证据句关系数量
+    pred_evi3 = 0        # 预测的3+证据句关系数量
+    correct_evi1 = 0     # 正确预测的1证据句关系数量
+    correct_evi2 = 0     # 正确预测的2证据句关系数量
+    correct_evi3 = 0     # 正确预测的3+证据句关系数量
 
     titleset2 = set([])
     for x in submission_answer:
@@ -180,6 +205,23 @@ def official_evaluate(tmp, path):
                 correct_intra += 1
             else:
                 correct_inter += 1
+            
+            # 统计 Evidence-1/2/3+ 正确数量（根据 Gold 的证据数量分组）
+            if (title, r, h_idx, t_idx) in std_evi1:
+                correct_evi1 += 1
+            elif (title, r, h_idx, t_idx) in std_evi2:
+                correct_evi2 += 1
+            elif (title, r, h_idx, t_idx) in std_evi3:
+                correct_evi3 += 1
+        
+        # 统计 Evidence-1/2/3+ 预测数量（根据 Gold 的证据数量分组）
+        key = (title, r, h_idx, t_idx)
+        if key in std_evi1:
+            pred_evi1 += 1
+        elif key in std_evi2:
+            pred_evi2 += 1
+        elif key in std_evi3:
+            pred_evi3 += 1
             
             in_train_annotated = False
             for n1 in vertexSet[h_idx]:
@@ -228,6 +270,30 @@ def official_evaluate(tmp, path):
     else:
         inter_f1 = 2.0 * inter_p * inter_r / (inter_p + inter_r)
 
+    # ========== Evidence-1 F1 计算 ==========
+    evi1_p = 1.0 * correct_evi1 / pred_evi1 if pred_evi1 > 0 else 0
+    evi1_r = 1.0 * correct_evi1 / tot_evi1_relations if tot_evi1_relations > 0 else 0
+    if evi1_p + evi1_r == 0:
+        evi1_f1 = 0
+    else:
+        evi1_f1 = 2.0 * evi1_p * evi1_r / (evi1_p + evi1_r)
+
+    # ========== Evidence-2 F1 计算 ==========
+    evi2_p = 1.0 * correct_evi2 / pred_evi2 if pred_evi2 > 0 else 0
+    evi2_r = 1.0 * correct_evi2 / tot_evi2_relations if tot_evi2_relations > 0 else 0
+    if evi2_p + evi2_r == 0:
+        evi2_f1 = 0
+    else:
+        evi2_f1 = 2.0 * evi2_p * evi2_r / (evi2_p + evi2_r)
+
+    # ========== Evidence-3+ F1 计算 ==========
+    evi3_p = 1.0 * correct_evi3 / pred_evi3 if pred_evi3 > 0 else 0
+    evi3_r = 1.0 * correct_evi3 / tot_evi3_relations if tot_evi3_relations > 0 else 0
+    if evi3_p + evi3_r == 0:
+        evi3_f1 = 0
+    else:
+        evi3_f1 = 2.0 * evi3_p * evi3_r / (evi3_p + evi3_r)
+
     # 打印详细的 Intra/Inter 统计信息
     print("\n" + "="*60)
     print("Intra-sentence vs Inter-sentence Evaluation Results")
@@ -245,9 +311,25 @@ def official_evaluate(tmp, path):
     print(f"\n[Inter-sentence] (entities never appear in the same sentence)")
     print(f"  Gold: {tot_inter_relations} | Pred: {pred_inter} | Correct: {correct_inter}")
     print(f"  P: {inter_p*100:.2f}% | R: {inter_r*100:.2f}% | F1: {inter_f1*100:.2f}%")
+    
+    print("\n" + "="*60)
+    print("Evidence Count Based Evaluation Results")
+    print("="*60)
+    
+    print(f"\n[Evidence-1] (relations supported by 1 evidence sentence)")
+    print(f"  Gold: {tot_evi1_relations} | Pred: {pred_evi1} | Correct: {correct_evi1}")
+    print(f"  P: {evi1_p*100:.2f}% | R: {evi1_r*100:.2f}% | F1: {evi1_f1*100:.2f}%")
+    
+    print(f"\n[Evidence-2] (relations supported by 2 evidence sentences)")
+    print(f"  Gold: {tot_evi2_relations} | Pred: {pred_evi2} | Correct: {correct_evi2}")
+    print(f"  P: {evi2_p*100:.2f}% | R: {evi2_r*100:.2f}% | F1: {evi2_f1*100:.2f}%")
+    
+    print(f"\n[Evidence-3+] (relations supported by 3+ evidence sentences)")
+    print(f"  Gold: {tot_evi3_relations} | Pred: {pred_evi3} | Correct: {correct_evi3}")
+    print(f"  P: {evi3_p*100:.2f}% | R: {evi3_r*100:.2f}% | F1: {evi3_f1*100:.2f}%")
     print("="*60 + "\n")
 
-    # 返回结果，添加 intra/inter 的指标
+    # 返回结果，添加 intra/inter 和 evidence 的指标
     return {
         'overall': {
             'f1': re_f1,
@@ -271,6 +353,30 @@ def official_evaluate(tmp, path):
             'gold': tot_inter_relations,
             'pred': pred_inter,
             'correct': correct_inter,
+        },
+        'evi1': {
+            'f1': evi1_f1,
+            'p': evi1_p,
+            'r': evi1_r,
+            'gold': tot_evi1_relations,
+            'pred': pred_evi1,
+            'correct': correct_evi1,
+        },
+        'evi2': {
+            'f1': evi2_f1,
+            'p': evi2_p,
+            'r': evi2_r,
+            'gold': tot_evi2_relations,
+            'pred': pred_evi2,
+            'correct': correct_evi2,
+        },
+        'evi3': {
+            'f1': evi3_f1,
+            'p': evi3_p,
+            'r': evi3_r,
+            'gold': tot_evi3_relations,
+            'pred': pred_evi3,
+            'correct': correct_evi3,
         }
     }
 
