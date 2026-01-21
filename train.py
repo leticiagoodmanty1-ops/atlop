@@ -95,11 +95,13 @@ def train(args, model, train_features, dev_features, test_features):
                     print(dev_output)
                     if dev_score > best_score:
                         best_score = dev_score
-                        pred = report(args, model, test_features)
+                        # 保存 dev 集的预测结果（而不是 test 集）
+                        pred = report(args, model, dev_features)
                         # Save to Kaggle working directory
-                        result_path = "/kaggle/working/result.json"
+                        result_path = "/kaggle/working/dev_result.json"
                         with open(result_path, "w") as fh:
                             json.dump(pred, fh)
+                        print(f"Saved dev predictions to {result_path}")
                         if args.save_path != "":
                             # Update save path to Kaggle working directory
                             save_path = os.path.join("/kaggle/working", os.path.basename(args.save_path))
@@ -365,12 +367,14 @@ def main():
         model.load_state_dict(torch.load(args.load_path))
         dev_score, dev_output = evaluate(args, model, dev_features, tag="dev")
         print(dev_output)
-        pred = report(args, model, test_features)
+        # 保存 dev 集的预测结果（而不是 test 集）
+        pred = report(args, model, dev_features)
         # Save to Kaggle working directory
         os.makedirs('/kaggle/working', exist_ok=True)
-        result_path = "/kaggle/working/result.json"
+        result_path = "/kaggle/working/dev_result.json"
         with open(result_path, "w") as fh:
             json.dump(pred, fh)
+        print(f"Saved dev predictions to {result_path}")
 
 
 if __name__ == "__main__":
