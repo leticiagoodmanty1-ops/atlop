@@ -56,6 +56,9 @@ class DocREModel(nn.Module):
         num_labels: int = -1,
         # Reasoning parameters
         num_reasoning_layers: int = 2,
+        # Ablation parameters
+        use_multihop_reasoning: bool = True,
+        use_longrange_modeling: bool = True,
     ):
         super().__init__()
         self.config = config
@@ -83,7 +86,9 @@ class DocREModel(nn.Module):
             num_heads=8,
             num_layers=num_reasoning_layers,
             dropout=0.1,
-            ffn_ratio=4
+            ffn_ratio=4,
+            use_multihop_reasoning=use_multihop_reasoning,
+            use_longrange_modeling=use_longrange_modeling,
         )
         
         # ===== Context Projector =====

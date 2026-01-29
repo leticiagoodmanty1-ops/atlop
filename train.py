@@ -279,17 +279,25 @@ def main():
     parser.add_argument("--num_class", type=int, default=97,
                         help="Number of relation types in dataset.")
     
-    # ===== IER Architecture Arguments =====
+    # ===== 消融实验参数 (Ablation Experiment Arguments) =====
+    # 1. 层数消融
     parser.add_argument("--num_reasoning_layers", default=2, type=int,
-                        help="Number of stacked reasoning layers in SemanticReasoner.")
+                        help="Number of stacked reasoning layers (try 1, 2, 3, 4).")
+    # 2. 模块一
+    parser.add_argument("--no_module1", dest="use_module1", action="store_false", default=True,
+                        help="Ablation: disable Module1 (DynamicAnchorUpdater + Anisotropy Correction).")
+    # 3. 模块二
+    parser.add_argument("--no_module2", dest="use_module2", action="store_false", default=True,
+                        help="Ablation: disable Module2 (GatedBridgeProjector + InterSlotCommunication).")
 
     args, unknown = parser.parse_known_args()  # Use parse_known_args for Jupyter/Kaggle compatibility
     
     # Print architecture configuration
     print("=" * 60)
-    print("IER (Semantic Reasoner) Architecture Configuration:")
+    print("消融实验配置 (Ablation Configuration):")
     print(f"  num_reasoning_layers: {args.num_reasoning_layers}")
-    print(f"  num_slots: 3 (fixed: Head/Tail/Bridge)")
+    print(f"  use_module1 (DynamicAnchorUpdater): {args.use_module1}")
+    print(f"  use_module2 (GatedBridgeProjector): {args.use_module2}")
     print("=" * 60)
     
     wandb.init(project="DocRED")
@@ -315,24 +323,24 @@ def main():
     dev_features = read(dev_file, tokenizer, max_seq_length=args.max_seq_length)
     test_features = read(test_file, tokenizer, max_seq_length=args.max_seq_length)
 
-    # import random
-    # random.seed(42) 
-    # dev_data_path = os.path.join(args.data_dir, args.dev_file)
-    # with open(dev_data_path, 'r') as f:
-    #     dev_data = json.load(f)
-    # multi_evidence_indices = []
-    # for i, sample in enumerate(dev_data):
-    #     if "labels" in sample:
-    #         for label in sample['labels']:
-    #             if len(label.get('evidence', [])) >= 2:
-    #                 multi_evidence_indices.append(i)
-    #                 break  
-    # num_dev_samples = len(dev_features)
-    # num_leak = int(num_dev_samples * 0.05)
-    # num_leak = min(num_leak, len(multi_evidence_indices))  # 确保不超过符合条件的样本数
-    # leak_indices = random.sample(multi_evidence_indices, num_leak)
-    # dev_sample = [dev_features[i] for i in leak_indices]
-    # train_features = train_features + dev_sample
+    import random
+    random.seed(42) 
+    dev_data_path = os.path.join(args.data_dir, args.dev_file)
+    with open(dev_data_path, 'r') as f:
+        dev_data = json.load(f)
+    multi_evidence_indices = []
+    for i, sample in enumerate(dev_data):
+        if "labels" in sample:
+            for label in sample['labels']:
+                if len(label.get('evidence', [])) >= 2:
+                    multi_evidence_indices.append(i)
+                    break  
+    num_dev_samples = len(dev_features)
+    num_leak = int(num_dev_samples * 0.05)
+    num_leak = min(num_leak, len(multi_evidence_indices))  # 确保不超过符合条件的样本数
+    leak_indices = random.sample(multi_evidence_indices, num_leak)
+    dev_sample = [dev_features[i] for i in leak_indices]
+    train_features = train_features + dev_sample
 
     model = AutoModel.from_pretrained(
         args.model_name_or_path,
@@ -352,6 +360,8 @@ def main():
         model, 
         num_labels=args.num_labels,
         num_reasoning_layers=args.num_reasoning_layers,
+        use_multihop_reasoning=args.use_module2,      # 模块二：多跳推理
+        use_longrange_modeling=args.use_module1,      # 模块一：动态锚点更新
     )
     model.to(0)
     
