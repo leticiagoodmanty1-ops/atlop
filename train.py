@@ -323,24 +323,24 @@ def main():
     dev_features = read(dev_file, tokenizer, max_seq_length=args.max_seq_length)
     test_features = read(test_file, tokenizer, max_seq_length=args.max_seq_length)
 
-    import random
-    random.seed(42) 
-    dev_data_path = os.path.join(args.data_dir, args.dev_file)
-    with open(dev_data_path, 'r') as f:
-        dev_data = json.load(f)
-    multi_evidence_indices = []
-    for i, sample in enumerate(dev_data):
-        if "labels" in sample:
-            for label in sample['labels']:
-                if len(label.get('evidence', [])) >= 2:
-                    multi_evidence_indices.append(i)
-                    break  
-    num_dev_samples = len(dev_features)
-    num_leak = int(num_dev_samples * 0.05)
-    num_leak = min(num_leak, len(multi_evidence_indices))  # 确保不超过符合条件的样本数
-    leak_indices = random.sample(multi_evidence_indices, num_leak)
-    dev_sample = [dev_features[i] for i in leak_indices]
-    train_features = train_features + dev_sample
+    # import random
+    # random.seed(42) 
+    # dev_data_path = os.path.join(args.data_dir, args.dev_file)
+    # with open(dev_data_path, 'r') as f:
+    #     dev_data = json.load(f)
+    # multi_evidence_indices = []
+    # for i, sample in enumerate(dev_data):
+    #     if "labels" in sample:
+    #         for label in sample['labels']:
+    #             if len(label.get('evidence', [])) >= 2:
+    #                 multi_evidence_indices.append(i)
+    #                 break  
+    # num_dev_samples = len(dev_features)
+    # num_leak = int(num_dev_samples * 0.05)
+    # num_leak = min(num_leak, len(multi_evidence_indices))  # 确保不超过符合条件的样本数
+    # leak_indices = random.sample(multi_evidence_indices, num_leak)
+    # dev_sample = [dev_features[i] for i in leak_indices]
+    # train_features = train_features + dev_sample
 
     model = AutoModel.from_pretrained(
         args.model_name_or_path,

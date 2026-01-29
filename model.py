@@ -241,7 +241,7 @@ class DocREModel(nn.Module):
                 doc_mask = attention_mask[doc_idx:doc_idx+1] if attention_mask is not None else None
                 
                 # Pre-compute K/V once for this document
-                precomputed_kv = self.reasoner.precompute_all_kv(doc_seq)
+                reasoning_kv, bridge_kv = self.reasoner.precompute_all_kv(doc_seq)
                 
                 # Get anchors for this document
                 doc_hs = hss[relation_idx:relation_idx + count]  # [count, H]
@@ -257,14 +257,25 @@ class DocREModel(nn.Module):
                     expanded_seq = doc_seq.expand(chunk_size, -1, -1)
                     expanded_mask = doc_mask.expand(chunk_size, -1) if doc_mask is not None else None
                     
-                    # Expand precomputed KV
-                    expanded_kv = [
+                    # Expand precomputed KV for reasoning layers
+                    expanded_reasoning_kv = [
                         PrecomputedKV(
                             keys=kv.keys.expand(chunk_size, -1, -1),
                             values=kv.values.expand(chunk_size, -1, -1)
                         )
-                        for kv in precomputed_kv
+                        for kv in reasoning_kv
                     ]
+                    
+                    # Expand precomputed KV for bridge projector
+                    expanded_bridge_kv = None
+                    if bridge_kv is not None:
+                        expanded_bridge_kv = (
+                            bridge_kv[0].expand(chunk_size, -1, -1),  # K
+                            bridge_kv[1].expand(chunk_size, -1, -1)   # V
+                        )
+                    
+                    # Package as tuple
+                    expanded_kv = (expanded_reasoning_kv, expanded_bridge_kv)
                     
                     # Semantic reasoning
                     h_ctx, t_ctx, bridge_ctx = self.reasoner(
@@ -275,9 +286,9 @@ class DocREModel(nn.Module):
                     all_t_contexts.append(t_ctx)
                     all_bridge_contexts.append(bridge_ctx)
                     
-                    del expanded_seq, expanded_mask, expanded_kv
+                    del expanded_seq, expanded_mask, expanded_kv, expanded_reasoning_kv, expanded_bridge_kv
                 
-                del precomputed_kv
+                del reasoning_kv, bridge_kv
                 relation_idx += count
             
             h_context = torch.cat(all_h_contexts, dim=0)
